@@ -1,11 +1,13 @@
 { config, lib, pkgs, ... }:
 let
   inherit (lib)
+    attrValues
+    concatMapStringsSep
+    mapAttrs
     mkEnableOption
     mkOption
     types
-    concatMapStringsSep
-    attrValues
+    isAttrs
     ;
 
   ageBin = "${pkgs.age}/bin/age";
@@ -56,7 +58,7 @@ let
         ${ageBin} --decrypt -i "${cfg.keyFile}" "${secret.file}" >"${out}"
       ''
     )
-    (attrValues cfg.secrets);
+    (attrValues cfg.secrets');
 
   aclCommands = concatMapStringsSep "\n"
     (secret:
@@ -68,7 +70,7 @@ let
         chown "${secret.owner}:${secret.group}" "${out}"
       ''
     )
-    (attrValues cfg.secrets);
+    (attrValues cfg.secrets');
 in
 {
   options = {
@@ -80,14 +82,33 @@ in
       };
 
       secrets = mkOption {
-        type = types.attrsOf secretOpts;
+        type = with types; attrsOf (oneOf [ path secretOpts ]);
         default = { };
-        description = "Lists of secrets to be decrypted by nager.";
+        description = ''
+          Lists of secrets to be decrypted by nager. Either an attrSet or just
+          a path to an encrypted file.
+        '';
+      };
+
+      secrets' = mkOption {
+        type = types.attrsOf secretOpts;
+        description = "Like `nager.secrets`, but shorthand is expanded.";
+        visible = false;
+        internal = true;
+        readOnly = true;
       };
     };
   };
 
   config = {
+    nager.secrets' = mapAttrs
+      (_: v:
+        if isAttrs v
+        then v
+        else { file = v; }
+      )
+      cfg.secrets;
+
     system.activationScripts = {
       nager = {
         text = ''
