@@ -82,7 +82,7 @@ let
   nager = builtins.fetchGit {
     url = "https://github.com/patagonicus/nager";
     rev = "a2295d01273d6adef1a9276d770f67eda06a4a37";
-    refs = "refs/heads/main";
+    ref = "refs/heads/main";
   };
 in {
   imports = [
