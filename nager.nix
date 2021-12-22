@@ -3,11 +3,13 @@ let
   inherit (lib)
     attrValues
     concatMapStringsSep
+    isAttrs
     mapAttrs
     mkEnableOption
+    mkIf
+    mkMerge
     mkOption
     types
-    isAttrs
     ;
 
   ageBin = "${pkgs.age}/bin/age";
@@ -100,46 +102,49 @@ in
     };
   };
 
-  config = {
-    nager.secrets' = mapAttrs
-      (_: v:
-        if isAttrs v
-        then v
-        else { file = v; }
-      )
-      cfg.secrets;
+  config = mkMerge [
+    {
+      nager.secrets' = mapAttrs
+        (_: v:
+          if isAttrs v
+          then v
+          else { file = v; }
+        )
+        cfg.secrets;
+    }
+    (mkIf (cfg.secrets' != { }) {
+      system.activationScripts = {
+        nager = {
+          text = ''
+            # First part: set up tmpfs if needed, create new directory for secrets.
+            _nager_generation="$(basename "$(readlink /run/nager)" || echo 0)"
+            (( ++_nager_generation ))
 
-    system.activationScripts = {
-      nager = {
-        text = ''
-          # First part: set up tmpfs if needed, create new directory for secrets.
-          _nager_generation="$(basename "$(readlink /run/nager)" || echo 0)"
-          (( ++_nager_generation ))
+            install -d -m 0751 -o root -g root /run/nager.d
+            grep -q "/run/nager.d tmpfs" /proc/mounts || mount -t tmpfs none "/run/nager.d" -o nodev,nosuid,noexec,mode=0751
+            install -d -m 0751 -o root -g root "/run/nager.d/$_nager_generation";
 
-          install -d -m 0751 -o root -g root /run/nager.d
-          grep -q "/run/nager.d tmpfs" /proc/mounts || mount -t tmpfs none "/run/nager.d" -o nodev,nosuid,noexec,mode=0751
-          install -d -m 0751 -o root -g root "/run/nager.d/$_nager_generation";
+            ${decryptCommands}
 
-          ${decryptCommands}
+            chmod 0400 "/run/nager.d/$_nager_generation/"*
 
-          chmod 0400 "/run/nager.d/$_nager_generation/"*
+            # Finally: replace old generation with new one, delete old generation
+            ln -sfn "/run/nager.d/$_nager_generation" /run/nager
+            rm -rf "/run/nager.d/$(( _nager_generation - 1 ))";
+          '';
+          deps = [ "specialfs" ];
+        };
 
-          # Finally: replace old generation with new one, delete old generation
-          ln -sfn "/run/nager.d/$_nager_generation" /run/nager
-          rm -rf "/run/nager.d/$(( _nager_generation - 1 ))";
-        '';
-        deps = [ "specialfs" ];
+        # Set up the secrets (without ACLs) before users are set up. This allows
+        # having encrypted password files (but hashedPassword is recommended
+        # instead).
+        users.deps = [ "nager" ];
+
+        nager-acls = {
+          text = aclCommands;
+          deps = [ "nager" "users" "groups" ];
+        };
       };
-
-      # Set up the secrets (without ACLs) before users are set up. This allows
-      # having encrypted password files (but hashedPassword is recommended
-      # instead).
-      users.deps = [ "nager" ];
-
-      nager-acls = {
-        text = aclCommands;
-        deps = [ "nager" "users" "groups" ];
-      };
-    };
-  };
+    })
+  ];
 }
