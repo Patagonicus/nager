@@ -56,7 +56,7 @@ let
         out = "/run/nager.d/$_nager_generation/${secret.name}";
       in
       ''
-        install -m 600 -o root -g root /dev/null "${out}"
+        install -m 600 -o 0 -g 0 /dev/null "${out}"
         ${ageBin} --decrypt -i "${cfg.keyFile}" "${secret.file}" >"${out}"
       ''
     )
@@ -120,9 +120,9 @@ in
             _nager_generation="$(basename "$(readlink /run/nager)" || echo 0)"
             (( ++_nager_generation ))
 
-            install -d -m 0751 -o root -g root /run/nager.d
+            install -d -m 0751 -o 0 -g 0 /run/nager.d
             grep -q "/run/nager.d tmpfs" /proc/mounts || mount -t tmpfs none "/run/nager.d" -o nodev,nosuid,noexec,mode=0751
-            install -d -m 0751 -o root -g root "/run/nager.d/$_nager_generation";
+            install -d -m 0751 -o 0 -g 0 "/run/nager.d/$_nager_generation";
 
             ${decryptCommands}
 
