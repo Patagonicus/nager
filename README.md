@@ -106,7 +106,7 @@ Configuration looks something like this:
     secrets = {
       # Decrypt ./vpn.wg.age and make it available as /run/nager/vpn.wg.
       # It will be owned by root:root and have 0400 permissions.
-      vpn.wg = ./vpn.wg.age;
+      "vpn.wg" = ./vpn.wg.age;
       application-key = {
         # The source file. When using the attrSet format, this is the only
         # required option.
